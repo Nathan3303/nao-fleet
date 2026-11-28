@@ -18,12 +18,15 @@
 `status` / `close` 的 tab 关联走 **tab id**（`herdr.tab` label 存 id；`_term_app_mint_tab` 也是确定性 id），不读 tab 的 name/where；
 `⑰⑤` 两条（rename 后 `status` 仍判在线、`close` 仍能回收）实跑 PASS。
 
-## 判据 4（幂等）：PM 已裁**方向 ②（dedupe 先于槽位分配）**，实现已落、**仍未命中（blocked）**
+## 判据 4（幂等）：**已知缺陷，已拆单 #292 / T601**
 
-**已实现**：`ensure` 目标循环里、`wsid` 之后、槽位计算**之前**新增 dedupe 分支 —— 判据 = 同仓基键（`nao.repo`）+ 同角色 + `term_liveness` 的 `verdict == online`；命中 ⇒ `warn 已在运行` + `SPAWN_SKIP++` + `continue`（effect 0），并调用 `_term_app_tab_converge_name` 做**收敛式幂等**（tab 串不一致才 rename）。`--force` 旁路。**未改 `_ensure_pick_num`**（那是方向 ① 的活，已被否）。
+`ensure` 同仓同角色重跑会取新槽位（`pm → pm2 → pm3`）而不是「已在运行 ⇒ 跳过」。根因 = **T595-A 的全局占用统计**把本仓的 `pm` 也当占用 —— 与 tab 显示无关，本单之前就存在 ⇒ **不在本单修**，已拆 **Issue #292（T601）**；本单分支**不带**未验证代码（死路径比没有更坏）。
 
-**实测仍不命中**：`cases/44 ⑰④` 四条红（重跑仍新建 `pm2`、无「已在运行」行、多发一次 tab.rename）。已确认前置成立：spawn **确实写了** `nao.repo = 仓基键`（⑰④ 前置断言 PASS），⑧ finished 残留清理仍 PASS。
-**下一个排查点（按成本排序）**：
-1. ensure 子进程里 `term_repo_label_rows`（facts 第 14 列）是否真的非空 —— 直接加一条 `-v` 打印即可定位（我最后一次调试没拿到输出，怀疑 `()` 子进程里 facts 缓存路径变量不同）。
-2. `(repo, role)` 匹配：`base_label` 与 `nao.repo` 是否逐字相等（`place_key_label` vs 写入值）。
-3. `term_liveness "$peer" "$repo"` 在 ensure 语境是否 `online`（可能被 `_TERM_PLACE_CACHE` 影响）。
+我在 `feat/290-tab-rename` 上按 PM 裁决的「方向 ②（dedupe 先于槽位分配）」实现过一版：位置 `wsid` 之后 / 槽位计算之前；判据 `nao.repo == base_label` ∧ 角色同 ∧ `term_liveness` verdict `online`（finished/残留不算 ⇒ 保住 `cases/44 ⑧`）；命中 runner-up 动作 = warn「已在运行 ⇒ 跳过」+ `SPAWN_SKIP++` + tab 串收敛。**实测仍不命中**（⑰④ 四条红：仍新建 `pm2`、无「已在运行」、多发一次 rename），故 **整体回退、不带进本 PR**（PM 决定）。
+
+**三条排查线索（已同步进 #292，下一轮从这里切）**：
+1. **ensure 子进程里 `term_repo_label_rows`（facts 第 14 列）是否非空** —— 我最后一次调试的 `[DBGD]` 打不出来（怀疑 `<( … )` 子进程丢了 facts 缓存路径变量，或被 `set -e` 短路吞掉），**这是最可能的断点**；
+2. `base_label` 与写入的 `nao.repo` 是否**逐字相等**（`place_key_label` 归一 vs 写入值）；
+3. ensure 语境下 `term_liveness "$peer" "$repo"` 是否 `online`（可能被 `_TERM_PLACE_CACHE` / 快照影响）。
+
+> 调试方法论（PM 追加提醒，值得记）：**先把「哪一层看不到」解决** —— 需要时写文件而不是 stdout，否则会一直在猜。

@@ -773,18 +773,6 @@ _term_app_spawn() {  # <name> <inner> <repo> [force] <label> [group] [task] [rep
 # T595-F（Issue #290）：tab 条显示串落字 —— app 里**唯一**能改 tab 条文字的是 `herdr-app do tab.rename`
 #   （实测：hc name / OSC title / label 都不参与渲染；默认串 = `<agent> · <space>`）。
 #   失败**只 warn**：显示缺陷不影响终端可用性，也不改 spawn 成败（判据 3）。
-# T595-F ④：按**名字**收敛 tab 条（dedupe 命中时用；幂等 —— 串相同则不发调用）
-_term_app_tab_converge_name() {  # <name> <label>
-  local name="${1-}" lbl="${2-}" addr g tid
-  [[ -n "$name" && -n "$lbl" ]] || return 1
-  addr="$(_term_app_find_by_name "$name" 2>/dev/null | head -1)"
-  [[ -n "$addr" ]] || return 1
-  g="$(_term_app_exec get "$addr" --json 2>/dev/null)" || return 1
-  _term_app_payload_ok "$g" || return 1
-  tid="$(_term_app_field "$g" "$TERM_APP_LABEL_TAB")"
-  [[ -n "$tid" ]] || return 1
-  _term_app_tab_rename "$tid" "$lbl"
-}
 
 _term_app_tab_rename() {  # <tab_id> <label> → 0 已改名 / 1 失败（已 warn）
   local tid="${1-}" lbl="${2-}" out=""
