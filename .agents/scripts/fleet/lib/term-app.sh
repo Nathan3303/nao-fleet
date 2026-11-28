@@ -761,11 +761,31 @@ _term_app_spawn() {  # <name> <inner> <repo> [force] <label> [group] [task] [rep
     return "$SPAWN_RC_FAIL"
   fi
   _TERM_SPAWN_PANE="$addr"; _TERM_SPAWN_WSID="$sp"; _TERM_SPAWN_TID="$tb"
+  # T595-F：tab 条 = `<nao 名> · <仓基键>`（本仓也写；失败只 warn ⇒ 不影响 spawn 成败与 rc）
+  _term_app_tab_rename "$tb" "$(term_tab_label "$name" "$repo_key" 2>/dev/null || printf '%s' "$name")" || true
   if [[ -n "${_TERM_SNAP_FILE:-}" ]]; then rm -f "$_TERM_SNAP_FILE" 2>/dev/null || true; _TERM_SNAP_FILE=""; fi
   if (( _TERM_PLACE_CACHE )); then
     _term_place_set_pane "$name" "$addr" "$sp" "$tb" "$repo" "$task"
   fi
   return "$SPAWN_RC_OK"
+}
+
+# T595-F（Issue #290）：tab 条显示串落字 —— app 里**唯一**能改 tab 条文字的是 `herdr-app do tab.rename`
+#   （实测：hc name / OSC title / label 都不参与渲染；默认串 = `<agent> · <space>`）。
+#   失败**只 warn**：显示缺陷不影响终端可用性，也不改 spawn 成败（判据 3）。
+
+_term_app_tab_rename() {  # <tab_id> <label> → 0 已改名 / 1 失败（已 warn）
+  local tid="${1-}" lbl="${2-}" out=""
+  [[ -n "$tid" && -n "$lbl" ]] || return 1
+  if ! command -v herdr-app >/dev/null 2>&1; then
+    warn "tab 条未改名（herdr-app 不在 PATH）：$tid → \"$lbl\"（只影响显示，终端可用）"
+    return 1
+  fi
+  out="$(HC_SOCKET="${HC_TERMINAL_SOCKET:-}" herdr-app do tab.rename --id "$tid" --name "$lbl" 2>&1)" || {
+    warn "tab 条改名失败（tab=$tid → \"$lbl\"）：$(printf '%s' "$out" | head -c 200)（只影响显示，spawn 仍成功）"
+    return 1
+  }
+  return 0
 }
 
 _term_app_deliver() {  # <addr> <message> → 0 已投递 / 1 失败（stdout: error code）

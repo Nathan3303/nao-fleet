@@ -46,14 +46,14 @@ t4_assert_eq "0" "$BE_RC" "S1 ensure pm rc=0（T4_ERR=$(printf '%s' "$BE_ERR_ANS
 t4_assert_eq "1" "$(ws_n "fx40-api")" "S1 ws label = 仓基键（fx40-api）"
 t4_assert_eq "$(ws_by_label "fx40-api")" "$(pane_ws pm)" "S1 pane 落该 ws"
 t4_assert_eq "$(phys "$RA")" "$(pane_cwd pm)" "S1 pane cwd = 仓根"
-t4_assert_eq "pm" "$(tab_label pm)" "S1 tab label = pm"
+t4_assert_eq "pm · fx40-api" "$(tab_label pm)" "S1 tab 条 = `pm · fx40-api`（T595-F 起）"
 
 # S2 同 ws 追加
 fin "$RA" ensure rd-be
 t4_assert_eq "0" "$BE_RC" "S2 ensure rd-be rc=0"
 t4_assert_eq "1" "$(ws_n "fx40-api")" "S2 同 ws 追加（label 仍 1 个）"
 t4_assert_eq "$(ws_by_label "fx40-api")" "$(pane_ws rd-be)" "S2 rd-be 落同一 ws"
-t4_assert_eq "rd-be" "$(tab_label rd-be)" "S2 tab label = rd-be"
+t4_assert_eq "rd-be · fx40-api" "$(tab_label rd-be)" "S2 tab 条 = `rd-be · fx40-api`（T595-F 起）"
 
 # S3 槽位递增 / 派生复用
 fin "$RA" ensure pm
