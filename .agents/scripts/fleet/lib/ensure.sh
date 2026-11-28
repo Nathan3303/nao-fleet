@@ -357,6 +357,31 @@ cmd_ensure() {
       slot=""
       if [[ -z "$card_as" ]]; then
         wsid="$(term_place_ws_for_label "$place")"
+      # T595-F ④（PM 裁决：**dedupe 先于槽位分配**）：同仓基键 + 同角色 + live 且可用 ⇒ 复用该会话。
+      #   为什么在槽位之前：`ensure` 的契约是「确保会话存在」，不是「每次分配新槽」；本仓同角色那个活终端
+      #   **就是我**，不是占用者。不同仓仍走全局占用（T595-A 的目的不变）。`--force` 旁路本分支（明确要重开）。
+      #   注意（判据 3）：只认 **live 且 verdict=online**；finished/陈旧残留不在此列，仍由 spawn 前的清理路径处理。
+      if [[ "$force" != "true" ]]; then
+        _dd_name=""; _dd_peer=""; _dd_repo=""
+        while IFS=$'\t' read -r _dd_peer _dd_repo; do
+          [[ -n "$_dd_peer" && "$_dd_repo" == "$base_label" ]] || continue
+          _pn2="$(fleet_name_parse "$_dd_peer")"; [[ "$_pn2" == "OK "* ]] || continue
+          IFS=',' read -r _k2 _r2 _t2 _s2 <<< "${_pn2#OK }"
+          [[ "$_r2" == "$NAME" ]] || continue
+          [[ "$(term_liveness "$_dd_peer" "$repo" 2>/dev/null | cut -f1)" == "online" ]] || continue
+          _dd_name="$_dd_peer"; break
+        done < <(term_repo_label_rows)
+        if [[ -n "$_dd_name" ]]; then
+          warn "$_dd_name 已在运行（同仓 + 同角色 + live）⇒ 跳过（effect=0；确需重开请加 --force）"
+          # 收敛式幂等：tab 条与期望串不一致 ⇒ 改回来（rename 自身幂等）
+          _dd_lbl="$(term_tab_label "$_dd_name" "$base_label" "" 2>/dev/null || true)"
+          if [[ "$(term_label)" == "app" ]]; then
+            _term_app_tab_converge_name "$_dd_name" "$_dd_lbl" || true
+          fi
+          SPAWN_SKIP=$((SPAWN_SKIP + 1))
+          continue
+        fi
+      fi
         # 卡会话同 role+task 已在 ⇒ same（复用名字；相位 2 判重跳过）；否则取空闲槽位
         if [[ -n "$task" ]]; then
           disp="$(_ensure_task_name_in_ws "$wsid" "$CARD_ROLE" "$task")"

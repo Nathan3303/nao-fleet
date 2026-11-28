@@ -647,12 +647,29 @@ t4_assert_eq "0" "$APP_RC" "⑰① 仓 A：ensure pm rc=0（tab 改名失败也�
 t4_assert_contains "$(tab_log)" -- "--name pm · $K17A" "⑰① tab 条 =「pm · 仓基键」（argv 级）"
 run_app ensure "pm@$R17B"
 t4_assert_contains "$(tab_log)" -- "--name pm2 · $K17B" "⑰② 同名不同仓可区分：pm · A vs pm2 · B"
-# ④ 幂等：**未覆盖 —— 已知阻塞（不是本单引入）**
-#   实测：同仓同角色重跑 ensure 会取**新槽位**（pm → pm2 → pm3）而不是「已在运行 ⇒ 跳过」。
-#   根因在 T595-A 的全局占用统计（`term_live_peer_names` 把**本仓**的 pm 也算占用了槽位 1），
-#   `rename` 无关（改名前后行为一致）。本单不改它（属 T595-A 的槽位策略，需 PM 定：同仓 peer 不计占用
-#   或重跑走 dedupe 分支）；我试过「同仓 peer 不计数」，但它破坏了 ⑧ 的 finished 残留清理判据 ⇒ 已回退。
-#   ⇒ 判据 4 以「已知阻塞」上报，本用例不写成期望（不把 bug 钉成预期）。
+# ④ 幂等（PM 裁决方向 ②：**dedupe 先于槽位分配**）—— 同仓同角色重跑 ⇒ 复用、name 不变、effect=0
+app_reset
+R17C="$T4_CACHE_DIR/lab44-t17c-$$"; mkdir -p "$R17C"
+K17C="$(bash -c 'source "$1/.agents/scripts/fleet/lib/core.sh" 2>/dev/null; source "$1/.agents/scripts/fleet/lib/manifest.sh" 2>/dev/null; place_key_label "$2"' _ "$LAB" "$R17C")"
+: > "$T4_HERDR_APP_LOG"
+run_app ensure "pm@$R17C"
+t4_assert_eq "0" "$APP_RC" "⑰④ 首次 ensure pm rc=0"
+_n4="$(app_addrs | grep -c . || true)"
+_l4="$(for a in $(app_addrs); do app_field "$a" name; done | tr '\n' ' ')"
+t4_assert_contains "$_l4" "pm" "⑰④ 首次：终端名 = pm"
+t4_assert_eq "$K17C" "$(for a in $(app_addrs); do app_field "$a" nao_repo; done | head -1)" \
+  "⑰④ 前置：spawn 写了 nao.repo = 仓基键（dedupe 判据的输入）"
+: > "$T4_HERDR_APP_LOG"
+APP_OVR=("PATH=$APPSTUB:$FIXT:$PATH")
+run_app ensure "pm@$R17C"
+APP_OVR=("PATH=$APPSTUB:$FIXT:$PATH")
+t4_assert_eq "0" "$APP_RC" "⑰④ 重跑 rc=0（纯跳过也是 0）"
+t4_assert_eq "$_n4" "$(app_addrs | grep -c . || true)" "⑰④ effect=0：不新建终端"
+t4_assert_eq "$_l4" "$(for a in $(app_addrs); do app_field "$a" name; done | tr '\n' ' ')" \
+  "⑰④ 名字不变（仍是 pm，**不出现 pm2**）"
+t4_assert_contains "$APP_OUT$APP_ERR" "已在运行" "⑰④ 输出「已在运行 ⇒ 跳过」"
+t4_assert_eq "0" "$(tab_log | grep -c . || true)" "⑰④ tab 串不变 ⇒ 不发 tab.rename（收敛式幂等）"
+
 # ⑤ 风险点：rename 之后 status / close 仍能找到（tab 匹配按 id，不靠 name）
 run_app status
 t4_assert_contains "$APP_OUT" "✓ pm" "⑰⑤ rename 后 status 仍判在线（tab 改名不影响身份链）"

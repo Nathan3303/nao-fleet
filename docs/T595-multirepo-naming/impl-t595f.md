@@ -18,9 +18,12 @@
 `status` / `close` 的 tab 关联走 **tab id**（`herdr.tab` label 存 id；`_term_app_mint_tab` 也是确定性 id），不读 tab 的 name/where；
 `⑰⑤` 两条（rename 后 `status` 仍判在线、`close` 仍能回收）实跑 PASS。
 
-## 已知阻塞（判据 4 幂等 —— **不是本单引入**）
+## 判据 4（幂等）：PM 已裁**方向 ②（dedupe 先于槽位分配）**，实现已落、**仍未命中（blocked）**
 
-同仓同角色重跑 `ensure` 会取**新槽位**（`pm → pm2 → pm3`）而不是「已在运行 ⇒ 跳过」。
-根因 = T595-A 的全局占用统计把**本仓**的 `pm` 也当占用（`_ensure_pick_num` 的 `term_live_peer_names` 来源），与 rename 无关。
-我试过「同仓 peer 不计数（按 `nao.repo` 过滤）」，但它**破坏 `cases/44 ⑧` 的 finished 残留清理判据** ⇒ 已回退，不夹带。
-⇒ 需 PM 定方向：① 同仓 peer 不计占用（要连带修 ⑧ 的清理路径）② 重跑走 dedupe 分支（不重算槽位）③ 接受并改幂等判据。
+**已实现**：`ensure` 目标循环里、`wsid` 之后、槽位计算**之前**新增 dedupe 分支 —— 判据 = 同仓基键（`nao.repo`）+ 同角色 + `term_liveness` 的 `verdict == online`；命中 ⇒ `warn 已在运行` + `SPAWN_SKIP++` + `continue`（effect 0），并调用 `_term_app_tab_converge_name` 做**收敛式幂等**（tab 串不一致才 rename）。`--force` 旁路。**未改 `_ensure_pick_num`**（那是方向 ① 的活，已被否）。
+
+**实测仍不命中**：`cases/44 ⑰④` 四条红（重跑仍新建 `pm2`、无「已在运行」行、多发一次 tab.rename）。已确认前置成立：spawn **确实写了** `nao.repo = 仓基键`（⑰④ 前置断言 PASS），⑧ finished 残留清理仍 PASS。
+**下一个排查点（按成本排序）**：
+1. ensure 子进程里 `term_repo_label_rows`（facts 第 14 列）是否真的非空 —— 直接加一条 `-v` 打印即可定位（我最后一次调试没拿到输出，怀疑 `()` 子进程里 facts 缓存路径变量不同）。
+2. `(repo, role)` 匹配：`base_label` 与 `nao.repo` 是否逐字相等（`place_key_label` vs 写入值）。
+3. `term_liveness "$peer" "$repo"` 在 ensure 语境是否 `online`（可能被 `_TERM_PLACE_CACHE` 影响）。
