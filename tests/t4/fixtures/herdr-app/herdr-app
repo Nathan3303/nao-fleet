@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# herdr-app 测试桩（T595-F · Issue #290）—— 只记调用并按需失败；不触真 app。
+#   记录：$T4_HERDR_APP_LOG（每行 = 原样 argv，空格分隔）
+#   失败：$HERDR_APP_FAIL 非空 ⇒ 打印错误 + 非 0（验「失败只 warn、spawn 仍成功」）
+log="${T4_HERDR_APP_LOG:-/dev/null}"
+printf '%s\n' "$*" >> "$log" 2>/dev/null || true
+if [ -n "${HERDR_APP_FAIL:-}" ] && [ "${1:-}" = "do" ] && [ "${2:-}" = "tab.rename" ]; then
+  printf '{"error":{"code":"app_offline","message":"stub failure"}}\n' >&2
+  exit 1
+fi
+printf '{"result":{"ok":true}}\n'

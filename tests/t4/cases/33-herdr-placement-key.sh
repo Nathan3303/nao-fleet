@@ -73,14 +73,14 @@ fleet ensure "rd-fe@$LAB/repo-b"
 t4_assert_eq "0" "$BE_RC" "U1 ensure rc=0（T4_ERR=$(printf '%s' "$BE_ERR_ANSI" | head -1)）"
 t4_assert_eq "GREEN" "$(u1_verdict "repo-b" "rd-fe")" \
   "U1 跨仓：ws label=仓基键(repo-b) · pane 名=rd-fe（不含 @）· 不在调用方 ws · 不新增会话名 workspace"
-t4_assert_eq "rd-fe" "$(tab_label_of_name "rd-fe")" "U1 tab label = 名字（组前缀退役）"
+t4_assert_eq "rd-fe · repo-b" "$(tab_label_of_name "rd-fe")" "U1 tab 条 = `<名> · <仓基键>`（T595-F 起；组前缀仍退役）"
 
 # ---------------------------------------------------------------- U2 同仓追加（复用同键）
 fleet ensure "qa@$LAB/repo-b"
 t4_assert_eq "0" "$BE_RC" "U2 ensure rc=0"
 t4_assert_eq "1" "$(ws_label_count "repo-b")" "U2 同仓追加：label=repo-b 的 workspace 仍恰 1 个"
 t4_assert_eq "$(ws_id_by_label "repo-b")" "$(pane_ws_by_label "qa")" "U2 qa 落在同一个仓 workspace"
-t4_assert_eq "qa" "$(tab_label_of_name "qa")" "U2 tab label = qa"
+t4_assert_eq "qa · repo-b" "$(tab_label_of_name "qa")" "U2 tab 条 = `qa · repo-b`（T595-F 起）"
 
 # ---------------------------------------------------------------- U3 worktree 与主仓同键
 if ! command -v git >/dev/null 2>&1; then

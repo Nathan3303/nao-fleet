@@ -936,11 +936,13 @@ _term_herdr_space_check() {  # <pane_id> <name> → 0 可继续 / 1 不可用（
 #   旧布局（一个 tab 内 split 出多 pane）⇒ 迁移无损：`pane move <pane> --new-tab`（pane_id 不变，
 #   被搬空的 tab 由 herdr 自动关闭）+ `tab rename` 把新 tab 标成角色名；
 #   tab 已独占但 label 旧（如根 tab 的 "1"）⇒ 只改 tab 名（effect 零风险）。
-_term_herdr_layout_converge() {  # <pane_id> <name> [group] → 0 布局 A 达成 / 1 未达成（fail loud）
-  local pid="${1-}" name="${2-}" group="${3-}" pt tid wsid row label cnt js newtid prev_tid="" closed_note=""
-  # #139（M3）：期望标签 = `<组前缀>/<name>`（group 空 ⇒ 逐字旧行为）。四处同源之一（收敛判据）。
-  local tablabel="$name"
-  [[ -n "$group" ]] && tablabel="$group/$name"
+_term_herdr_layout_converge() {  # <pane_id> <name> [group] [repo_key] → 0 布局 A 达成 / 1 未达成（fail loud）
+  local pid="${1-}" name="${2-}" group="${3-}" repo_key="${4-}" pt tid wsid row label cnt js newtid prev_tid="" closed_note=""
+  # T595-F：期望标签与 spawn 的 tab create **同一构造点**（`term_tab_label`）——
+  #   否则每次 ensure 都会把 tab 改名回旧串（幂等性被打破）。
+  local tablabel
+  tablabel="$(term_tab_label "$name" "$repo_key" "$group" 2>/dev/null)" || {
+    tablabel="$name"; [[ -n "$group" ]] && tablabel="$group/$name"; }
   pt="$(_term_herdr_pane_tab "$pid")"
   if [[ -z "$pt" ]]; then
     warn "布局判据不可用：pane=$pid 不在 pane list（无法确认独立 tab）⇒ 计 SPAWN_FAIL"
@@ -983,8 +985,9 @@ _term_herdr_layout_converge() {  # <pane_id> <name> [group] → 0 布局 A 达�
 _term_herdr_spawn() {  # <name> <inner> <repo> [force] <label> [group] [task] [repo_key] → SPAWN_RC_OK|FAIL
   local name="${1-}" inner="${2-}" repo="${3-}" force="${4:-false}" label="${5-}" group="${6-}" task="${7-}" repo_key="${8-}" pl="" obj js line
   local pane="" wsid="" tid="" first="" nmatch=0 hit="" verdict="" seq="" launched=0 live_n=""
-  # T554：tab 标签 = 名字（**组前缀退役** —— 1 workspace = 1 仓，同仓无需 `code/` 分组）。
-  local tablabel="$name"
+  # T595-F：tab 条 = `<name> · <仓基键>`（与 app `tab.rename` 同串；仓基键缺 ⇒ 退回角色名）
+  local tablabel
+  tablabel="$(term_tab_label "$name" "${repo_key:-}" "$group" 2>/dev/null)" || tablabel="$name"
   [[ -n "$name" && -n "$inner" ]] || { warn "herdr spawn 参数缺失（name/inner）"; return "$SPAWN_RC_FAIL"; }
   # 放置键（T554）：入参 = **仓基键**（含冲突号，调用方相位 1 算定）；本函数不反解名字、不重算仓 slug。
   [[ -n "$label" ]] || { warn "herdr spawn 缺 workspace label（期望 = 仓基键；repo=$repo）"; return "$SPAWN_RC_FAIL"; }
@@ -1168,7 +1171,7 @@ _term_herdr_spawn() {  # <name> <inner> <repo> [force] <label> [group] [task] [r
   fi
 
   # ---- J2 结构收敛（布局 A）：复用路径也跑（旧布局的 pane 在共享 tab 里 ⇒ 迁移到独立 tab）----
-  if ! _term_herdr_layout_converge "$pane" "$name" "$group"; then
+  if ! _term_herdr_layout_converge "$pane" "$name" "$group" "${repo_key:-}"; then
     return "$SPAWN_RC_FAIL"
   fi
   # ---- J1/J5 空间判据（放置后自测；0 尺寸 ⇒ SPAWN_FAIL，不足 ⇒ 只 warn）----

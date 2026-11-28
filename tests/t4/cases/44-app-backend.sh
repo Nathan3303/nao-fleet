@@ -629,4 +629,43 @@ stub_hc run --bg --no-parent --keep --name rd-fe2 --cwd "$B_REPO" \
   --label herdr.space=spB --label herdr.tab=tbB --label nao.name=rd-fe2 --label nao.task=T1 --label nao.repo="$A_KEY" -- true >/dev/null
 t4_assert_eq "conflict" "$(json_rs "$A_REPO" rd-fe2)" "⑯⑤ --json：冲突 ⇒ repoSource=conflict"
 
+# ================================================================ ⑰ T595-F（Issue #290）：app tab 条 = `<nao 名> · <仓基键>`
+#   搬自设计 §4 的**实测**结论：app 里唯一能改 tab 条文字的是 `herdr-app do tab.rename`（其余全不渲染）。
+#   夹具：`tests/t4/fixtures/herdr-app`（记 argv；`HERDR_APP_FAIL` 注入失败）。
+APPSTUB="$T4_ROOT/tests/t4/fixtures/herdr-app"
+export T4_HERDR_APP_LOG="$LAB/app-log"
+: > "$T4_HERDR_APP_LOG"
+APP_OVR=("PATH=$APPSTUB:$FIXT:$PATH")
+tab_log() { grep -F 'tab.rename' "$T4_HERDR_APP_LOG" 2>/dev/null || true; }
+app_reset
+R17A="$T4_CACHE_DIR/lab44-t17a-$$"; R17B="$T4_CACHE_DIR/lab44-t17b-$$"
+mkdir -p "$R17A" "$R17B"
+K17A="$(bash -c 'source "$1/.agents/scripts/fleet/lib/core.sh" 2>/dev/null; source "$1/.agents/scripts/fleet/lib/manifest.sh" 2>/dev/null; place_key_label "$2"' _ "$LAB" "$R17A")"
+K17B="$(bash -c 'source "$1/.agents/scripts/fleet/lib/core.sh" 2>/dev/null; source "$1/.agents/scripts/fleet/lib/manifest.sh" 2>/dev/null; place_key_label "$2"' _ "$LAB" "$R17B")"
+run_app ensure "pm@$R17A"
+t4_assert_eq "0" "$APP_RC" "⑰① 仓 A：ensure pm rc=0（tab 改名失败也不影响成否）"
+t4_assert_contains "$(tab_log)" -- "--name pm · $K17A" "⑰① tab 条 =「pm · 仓基键」（argv 级）"
+run_app ensure "pm@$R17B"
+t4_assert_contains "$(tab_log)" -- "--name pm2 · $K17B" "⑰② 同名不同仓可区分：pm · A vs pm2 · B"
+# ④ 幂等：**未覆盖 —— 已知阻塞（不是本单引入）**
+#   实测：同仓同角色重跑 ensure 会取**新槽位**（pm → pm2 → pm3）而不是「已在运行 ⇒ 跳过」。
+#   根因在 T595-A 的全局占用统计（`term_live_peer_names` 把**本仓**的 pm 也算占用了槽位 1），
+#   `rename` 无关（改名前后行为一致）。本单不改它（属 T595-A 的槽位策略，需 PM 定：同仓 peer 不计占用
+#   或重跑走 dedupe 分支）；我试过「同仓 peer 不计数」，但它破坏了 ⑧ 的 finished 残留清理判据 ⇒ 已回退。
+#   ⇒ 判据 4 以「已知阻塞」上报，本用例不写成期望（不把 bug 钉成预期）。
+# ⑤ 风险点：rename 之后 status / close 仍能找到（tab 匹配按 id，不靠 name）
+run_app status
+t4_assert_contains "$APP_OUT" "✓ pm" "⑰⑤ rename 后 status 仍判在线（tab 改名不影响身份链）"
+run_app close pm
+t4_assert_eq "0" "$APP_RC" "⑰⑤ rename 后 close 仍能回收（tab 改名不破坏匹配）"
+# ③ 失败降级：stub 返回非 0 ⇒ warn + spawn 仍成功（rc=0）
+app_reset
+: > "$T4_HERDR_APP_LOG"
+APP_OVR=("PATH=$APPSTUB:$FIXT:$PATH" "HERDR_APP_FAIL=1")
+run_app ensure "qa@$R17A"
+APP_OVR=("PATH=$APPSTUB:$FIXT:$PATH")
+t4_assert_eq "0" "$APP_RC" "⑰③ tab 改名失败 ⇒ warn-only，spawn 仍成功（rc=0）"
+t4_assert_contains "$APP_ERR" "tab 条改名失败" "⑰③ 点名失败原因（不静默）"
+t4_assert_contains "$APP_ERR" "只影响显示" "⑰③ 说明影响面（显示 ≠ 可用性）"
+
 t4_exit

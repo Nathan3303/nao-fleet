@@ -135,6 +135,14 @@ term_snapshot() {
 #   integration-missing → online；`hook_authority` = agent list 的 screen_detection_skipped
 #   （1 = 状态来自生命周期 hook（可信）/ 0 = 屏幕启发式或缺失（保守不可投递））。
 # 归属 label 投影（T595-B）：每行 `<name>\t<nao.repo>`（缺失 ⇒ `-`）。只读快照，零额外后端调用。
+# tab 条显示串（T595-F · Issue #290）：`[<group>/]<nao 名> · <仓基键>` —— **两后端同源**，
+#   app 用 `herdr-app do tab.rename` 落字（实测：hc name / OSC title / label 都不渲染），TUI 用 `tab create --label`。
+term_tab_label() {  # <name> <repo_key> [group]
+  local name="${1-}" repo_key="${2-}" group="${3-}"
+  [[ -n "$name" && -n "$repo_key" ]] || return 1
+  printf '%s%s · %s\n' "${group:+$group/}" "$name" "$repo_key"
+}
+
 term_repo_label_rows() {
   _term_facts 2>/dev/null | awk -F'\t' 'NF>=14 && $1 != "" { printf "%s\t%s\n", $1, ($14 == "" ? "-" : $14) }' | awk '!seen[$0]++'
 }
