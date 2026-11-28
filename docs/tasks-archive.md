@@ -1451,6 +1451,7 @@ PR [#148](https://github.com/Nathan3303/nao-fleet/pull/148) squash 合并 · 六
 ## T595 · multirepo-naming（多仓同名解阻塞 · 方案 F 的 A 步）
 
 - ✅ **已合并 `6c53497`**（PR #280 · Issue #273）· 发布 v0.37.2：app 后端槽位占用改**全局**（`term_live_peer_names`，herdr 侧不并全局）· `name_taken` **只对这一种**让号重试（判据用信号不用 rc）· 零/部分 label 同名 ⇒ **fail-closed 拒绝 + 指路**（`_term_app_label_state`）· 槽位段保持 2..9（扩 99 属命名契约变更，另立）。设计 `design.md`（arch，方案 F 六条裁定）。
+- ✅ **T595-B 已交付**（PR #289 · 分支 `feat/595b-label-attribution`）：**归属由 `nao.repo` label 承载** —— spawn 一次写全 `nao.repo`（= 仓基键，≤16、禁绝对路径）/`nao.role`/`nao.slot`（app label · herdr sidecar `repo=`）· 归属裁决 `label → cwd → 名字(legacy)`，**冲突 ⇒ `unknown`**（不猜不误杀；label 在而 cwd 不可读 ⇒ 采信 label）· `status --json` 新增 `repoSource: label|cwd|conflict`（schema 仍 1）· 迁移**不回填**、`where` 禁入解析 · 仓基键由 `ensure` 相位 1 算定后传入（spawn 内零重算，`cases/28` C3④ 仍绿）· 用例 `cases/44` ⑯ 段 9 条（两仓并存双夹具 / 冲突 / legacy 不回归 / 三来源）。QA 9 条功能判据全过、全量 48/48。**已知边界**：冲突文本行只在健康终端出现（缺 hook 先落「集成缺失」分支）—— 本单刻意不扩，见 `docs/T595-multirepo-naming/impl-t595b.md`。
 
 <a id="T596"></a>
 ## T596 · readme-rewrite（README 按 user-guide-writing 重写）
